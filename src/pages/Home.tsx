@@ -29,8 +29,7 @@ export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authent
     const navigate = useNavigate()
     const audio = useAudio(isMuted)
     const ambientStarted = useRef(false)
-    const { stats, players: leaderboardPlayers, loading: leaderboardLoading } = useLeaderboard()
-
+    const { stats, players: leaderboardPlayers } = useLeaderboard()
     const [introComplete, setIntroComplete] = useState(false)
     const [isFirstVisit, setIsFirstVisit] = useState(false)
     const [typedText, setTypedText] = useState('')

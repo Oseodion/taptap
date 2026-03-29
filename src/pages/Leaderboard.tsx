@@ -61,8 +61,7 @@ const rankColor = (rank: number) => {
 
 export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('alltime')
-  const { players: liveePlayers, loading } = useLeaderboard()
-
+  const { players: liveePlayers } = useLeaderboard()
   const glass = isDark ? {
     background: 'rgba(255, 255, 255, 0.05)',
     backdropFilter: 'blur(32px) saturate(200%)',
@@ -80,11 +79,11 @@ export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, 
   // Use live data if available, fallback to mock
   const entries = liveePlayers.length > 0
     ? liveePlayers.map(p => ({
-        rank: p.rank,
-        handle: p.x_handle,
-        wins: p.wins,
-        earned: p.total_earned,
-      }))
+      rank: p.rank,
+      handle: p.x_handle,
+      wins: p.wins,
+      earned: p.total_earned,
+    }))
     : MOCK_DATA[activeTab]
 
   // Find current user in entries
@@ -125,7 +124,7 @@ export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, 
                 ) : (
                   <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                     </svg>
                   </div>
                 )}
@@ -190,7 +189,7 @@ export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, 
                           <img src={xAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={xHandle ?? ''} />
                         ) : (
                           <svg width="12" height="12" viewBox="0 0 24 24" fill={isCurrentUser ? 'white' : 'var(--primary)'}>
-                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                           </svg>
                         )}
                       </div>
@@ -217,7 +216,7 @@ export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, 
             <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)' }}>Sign in with X to track your wins and appear on the leaderboard</span>
             <button onClick={login} style={{ padding: '8px 18px', background: 'var(--primary)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, boxShadow: '0 4px 16px rgba(124,58,237,0.3)' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
               </svg>
               Sign in
             </button>

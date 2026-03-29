@@ -60,7 +60,6 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
   const [claimSeconds, setClaimSeconds] = useState(CLAIM_WINDOW)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
-  const [opponentCount, setOpponentCount] = useState(1)
 
   const intervalRef = useRef<number | null>(null)
   const botTimerRef = useRef<number | null>(null)
@@ -84,22 +83,21 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
 
   // Join room on mount, leave on unmount
   useEffect(() => {
-    if (!room || hasJoined.current) return
-    hasJoined.current = true
-    joinRoom()
-  }, [room])
+  if (!room || hasJoined.current) return
+  hasJoined.current = true
+  joinRoom()
+
+  return () => {
+    if (hasJoined.current) {
+      hasJoined.current = false
+      leaveRoom()
+    }
+  }
+}, [room?.room_id])
 
   useEffect(() => {
     return () => { if (hasJoined.current) leaveRoom() }
   }, [])
-
-  // For non-demo rooms — wait for players to fill up
-  useEffect(() => {
-    if (config.isDemo) return
-    if (!room) return
-    const count = room.player_count
-    setOpponentCount(Math.max(0, count - 1))
-  }, [room])
 
   // ── Waiting phase ─────────────────────────────────────────────────────────
   useEffect(() => {

@@ -61,15 +61,14 @@ export function useRoom(roomId: string) {
   }
 
   async function leaveRoom() {
-    if (!room) return
-    await supabase
-      .from('room_sessions')
-      .update({
-        player_count: Math.max(0, room.player_count - 1),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('room_id', roomId)
-  }
+  await supabase
+    .from('room_sessions')
+    .update({
+      player_count: Math.max(0, (room?.player_count ?? 1) - 1),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('room_id', roomId)
+}
 
   async function setRoomStatus(status: 'waiting' | 'live' | 'finished') {
     await supabase
