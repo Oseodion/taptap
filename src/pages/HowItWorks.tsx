@@ -444,7 +444,7 @@ function Step({
     </div>
   )
 }
-export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
+export default function HowItWorks({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
   const navigate = useNavigate()
 
   return (

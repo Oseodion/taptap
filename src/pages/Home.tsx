@@ -26,7 +26,7 @@ const ROOM_CONFIGS = [
     { id: 'fast-lane', name: 'Fast Lane', pot: 25, maxPlayers: 2, isDemo: false },
 ]
 
-export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
+export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
     const navigate = useNavigate()
     const audio = useAudio(isMuted)
     const ambientStarted = useRef(false)

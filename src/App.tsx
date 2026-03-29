@@ -12,7 +12,7 @@ export default function App() {
     document.documentElement.classList.contains('dark')
   )
   const [isMuted, setIsMuted] = useState(false)
-  const { authenticated, user, login, logout } = usePrivy()
+  const { authenticated, user, login, logout, createWallet } = usePrivy()
   const location = useLocation()
 
   // ── Persistent ambient audio — never unmounts ─────────────────────────
@@ -21,18 +21,16 @@ export default function App() {
   const fadeIntervalRef = useRef<number | null>(null)
 
   useEffect(() => {
-    // Create audio once — never recreate
     const audio = new Audio(ambientSrc)
     audio.loop = true
     audio.volume = 0.18
     ambientRef.current = audio
 
-    // Start on first user interaction anywhere in the app
     const handleFirstInteraction = () => {
       if (ambientStarted.current) return
       ambientStarted.current = true
       if (!isMuted) {
-        audio.play().catch(() => {})
+        audio.play().catch(() => { })
       }
       window.removeEventListener('click', handleFirstInteraction)
       window.removeEventListener('keydown', handleFirstInteraction)
@@ -54,26 +52,34 @@ export default function App() {
     if (isMuted) {
       ambientRef.current.pause()
     } else if (ambientStarted.current) {
-      ambientRef.current.play().catch(() => {})
+      ambientRef.current.play().catch(() => { })
     }
   }, [isMuted])
 
-  // Fade out ambient when entering a room, fade back in when leaving
+  // Fade out ambient when entering a room, stop completely
   useEffect(() => {
     if (!ambientRef.current || !ambientStarted.current) return
     const inRoom = location.pathname.startsWith('/room/')
-
     if (inRoom) {
-      // Fade out ambient smoothly
       fadeAmbient(ambientRef.current, 0.18, 0, 800)
     } else {
-      // Fade back in when returning to other pages
       if (!isMuted) {
-        ambientRef.current.play().catch(() => {})
+        ambientRef.current.play().catch(() => { })
         fadeAmbient(ambientRef.current, ambientRef.current.volume, 0.18, 800)
       }
     }
   }, [location.pathname])
+
+  // Auto-create Starknet wallet for user after sign in if they don't have one
+  useEffect(() => {
+    if (!authenticated) return
+    const hasStarknetWallet = (user?.linkedAccounts as any[])?.some(
+      (a: any) => a.type === 'wallet' && a.chainType === 'starknet'
+    )
+    if (!hasStarknetWallet) {
+      createWallet().catch(() => { })
+    }
+  }, [authenticated])
 
   function fadeAmbient(audio: HTMLAudioElement, from: number, to: number, durationMs: number) {
     if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current)
@@ -100,10 +106,10 @@ export default function App() {
     : null
 
   const xAvatar = user?.twitter?.profilePictureUrl ?? null
-  // Get Starknet wallet address from Privy linked accounts
-const walletAddress = (user?.linkedAccounts as any[])?.find(
-  (a: any) => a.type === 'wallet' && a.chainType === 'starknet'
-)?.address ?? null
+
+  const walletAddress = (user?.linkedAccounts as any[])?.find(
+    (a: any) => a.type === 'wallet' && a.chainType === 'starknet'
+  )?.address ?? null
 
   function toggleTheme() {
     const root = document.documentElement
