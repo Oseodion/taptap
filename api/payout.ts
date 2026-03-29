@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         signer: new StarkSigner(privateKey),
         accountClass: accountPresets.argentXV050,
       },
-      deploy: 'never',
+      deploy: 'if_needed',
     })
 
     // Get STRK token preset for Sepolia
