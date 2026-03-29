@@ -16,6 +16,7 @@ interface Props {
   authenticated: boolean
   xHandle: string | null
   xAvatar: string | null
+  walletAddress: string | null
   login: () => void
   logout: () => void
 }
@@ -42,7 +43,7 @@ const COUNTDOWN_DURATION = 10
 const CLICK_WINDOW = 3
 const CLAIM_WINDOW = 60
 
-export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
+export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
   const { id: roomId = 'demo' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const audio = useAudio(isMuted)
@@ -83,17 +84,17 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
 
   // Join room on mount, leave on unmount
   useEffect(() => {
-  if (!room || hasJoined.current) return
-  hasJoined.current = true
-  joinRoom()
+    if (!room || hasJoined.current) return
+    hasJoined.current = true
+    joinRoom()
 
-  return () => {
-    if (hasJoined.current) {
-      hasJoined.current = false
-      leaveRoom()
+    return () => {
+      if (hasJoined.current) {
+        hasJoined.current = false
+        leaveRoom()
+      }
     }
-  }
-}, [room?.room_id])
+  }, [room?.room_id])
 
   useEffect(() => {
     return () => { if (hasJoined.current) leaveRoom() }
@@ -225,7 +226,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
     setPhase('paying')
 
     try {
-      const winnerAddress = `privy:${xHandle}` // placeholder — real wallet from Privy embedded wallet
+      const winnerAddress = walletAddress ?? xHandle ?? ''
       const result = await payout.sendPayout(winnerAddress, POT)
       setTxHash(result.txHash)
       setExplorerUrl(result.explorerUrl)

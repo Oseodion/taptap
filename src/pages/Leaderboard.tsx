@@ -12,6 +12,7 @@ interface Props {
   authenticated: boolean
   xHandle: string | null
   xAvatar: string | null
+  walletAddress: string | null
   login: () => void
   logout: () => void
 }
@@ -59,7 +60,7 @@ const rankColor = (rank: number) => {
   return { bg: 'transparent', color: 'var(--text2)', border: 'transparent' }
 }
 
-export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
+export default function Leaderboard({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('alltime')
   const { players: liveePlayers } = useLeaderboard()
   const glass = isDark ? {

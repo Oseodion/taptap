@@ -12,6 +12,7 @@ interface Props {
   authenticated: boolean
   xHandle: string | null
   xAvatar: string | null
+  walletAddress: string | null
   login: () => void
   logout: () => void
 }
@@ -443,7 +444,7 @@ function Step({
     </div>
   )
 }
-export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
+export default function Home({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
   const navigate = useNavigate()
 
   return (
