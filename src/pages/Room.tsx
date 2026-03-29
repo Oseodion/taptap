@@ -26,11 +26,11 @@ type Phase =
   | 'countdown'
   | 'clickable'
   | 'demo_claim'
+  | 'enter_wallet'
   | 'paying'
   | 'winner'
   | 'loser'
   | 'expired'
-  | 'full'        // room is full, waiting for spot
 
 const ROOM_CONFIG: Record<string, { name: string; pot: number; maxPlayers: number; isDemo: boolean }> = {
   'demo': { name: 'Demo', pot: 5, maxPlayers: 2, isDemo: true },
@@ -61,6 +61,8 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
   const [claimSeconds, setClaimSeconds] = useState(CLAIM_WINDOW)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
+  const [inputWallet, setInputWallet] = useState('')
+  const [walletError, setWalletError] = useState('')
 
   const intervalRef = useRef<number | null>(null)
   const botTimerRef = useRef<number | null>(null)
@@ -82,18 +84,12 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
     boxShadow: '0 8px 32px rgba(124,58,237,0.08), inset 0 1.5px 0 rgba(255,255,255,0.9)',
   }
 
-  // Join room on mount, leave on unmount
+  // Join room on mount
   useEffect(() => {
     if (!room || hasJoined.current) return
     hasJoined.current = true
     joinRoom()
-
-    return () => {
-      if (hasJoined.current) {
-        hasJoined.current = false
-        leaveRoom()
-      }
-    }
+    return () => { if (hasJoined.current) { hasJoined.current = false; leaveRoom() } }
   }, [room?.room_id])
 
   useEffect(() => {
@@ -103,24 +99,17 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
   // ── Waiting phase ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'waiting') return
-
-    // For non-demo rooms — don't start until room is full
     if (!config.isDemo && room && room.player_count < config.maxPlayers) return
 
     intervalRef.current = window.setInterval(() => {
       setWaitSeconds(s => {
         if (s <= 1) {
           clearInterval(intervalRef.current!)
-          // Bot wins ~15% of the time (range: 50ms to 600ms after zero)
-          // Always positive so click window always opens
-          // Occasionally fast (50-150ms) which is hard to beat
           const rand = Math.random()
           if (rand < 0.1) {
-            // Bot wins ~10% — still fast but beatable if you're quick
-            botReactionMs.current = 150 + Math.random() * 150  // 150-300ms
+            botReactionMs.current = 150 + Math.random() * 150
           } else {
-            // Bot is slow — very easy to beat
-            botReactionMs.current = 400 + Math.random() * 600  // 400-1000ms
+            botReactionMs.current = 400 + Math.random() * 600
           }
           userClickedRef.current = false
           audio.playCountdown()
@@ -142,7 +131,6 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
         if (s <= 1) {
           clearInterval(intervalRef.current!)
           audio.stopCountdown()
-          // Always open click window — bot fires after reaction time
           setPhase('clickable')
           botTimerRef.current = window.setTimeout(() => {
             if (!userClickedRef.current) setPhase('loser')
@@ -189,10 +177,11 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
     return () => clearInterval(intervalRef.current!)
   }, [phase])
 
-  // Auto-trigger payout when user signs in on claim screen
+  // Auto-trigger wallet entry when user signs in on claim screen
   useEffect(() => {
-    if (phase === 'demo_claim' && authenticated && xHandle) {
-      handleClaim()
+    if (phase === 'demo_claim' && authenticated) {
+      clearInterval(intervalRef.current!)
+      setPhase('enter_wallet')
     }
   }, [authenticated, phase])
 
@@ -212,27 +201,27 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
     clearInterval(intervalRef.current!)
     clearTimeout(botTimerRef.current!)
     audio.playClick()
-
-    if (authenticated && xHandle) {
-      setPhase('paying')
-      handleClaim()
-    } else {
-      setPhase('demo_claim')
-    }
+    setPhase('enter_wallet')
   }
 
-  async function handleClaim() {
-    clearInterval(intervalRef.current!)
-    setPhase('paying')
+  function handleWalletSubmit() {
+    const addr = inputWallet.trim()
+    if (!addr.startsWith('0x') || addr.length < 20) {
+      setWalletError('Please enter a valid Starknet address starting with 0x')
+      return
+    }
+    setWalletError('')
+    handleClaim(addr)
+  }
 
+  async function handleClaim(winnerAddr: string) {
+    setPhase('paying')
     try {
-      const winnerAddress = walletAddress ?? xHandle ?? ''
-      const result = await payout.sendPayout(winnerAddress, POT)
+      const result = await payout.sendPayout(winnerAddr, POT)
       setTxHash(result.txHash)
       setExplorerUrl(result.explorerUrl)
-
       if (xHandle) {
-        await recordWin(xHandle, xAvatar, winnerAddress, POT, roomId, result.txHash)
+        await recordWin(xHandle, xAvatar, winnerAddr, POT, roomId, result.txHash)
       }
       setPhase('winner')
     } catch {
@@ -252,11 +241,12 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
     setClaimSeconds(CLAIM_WINDOW)
     setTxHash(null)
     setExplorerUrl(null)
+    setInputWallet('')
+    setWalletError('')
   }
 
   const timerColor = countSeconds > 7 ? 'var(--primary)' : countSeconds > 3 ? 'var(--gold)' : 'var(--red)'
   const timerGlow = countSeconds > 7 ? 'rgba(124,58,237,0.4)' : countSeconds > 3 ? 'rgba(245,158,11,0.4)' : 'rgba(239,68,68,0.5)'
-
   const playerCount = room?.player_count ?? 1
 
   return (
@@ -273,9 +263,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
               style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', paddingTop: '24px', paddingBottom: '24px' }}
             >
               <div style={{ ...glass, borderRadius: '24px', padding: '32px', width: '100%', textAlign: 'center' }}>
-                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: 'var(--text2)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '12px' }}>
-                  {config.name} Room
-                </div>
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: 'var(--text2)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '12px' }}>{config.name} Room</div>
                 <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 'clamp(40px, 8vw, 64px)', fontWeight: 700, color: 'var(--gold)', lineHeight: 1, marginBottom: '8px' }}>{POT} STRK</div>
                 <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', marginBottom: '24px' }}>in the pot</div>
 
@@ -286,7 +274,6 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                   </div>
                 )}
 
-                {/* Players */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
                   {config.isDemo ? (
                     <>
@@ -307,20 +294,15 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                   )}
                 </div>
 
-                {/* Waiting message */}
                 {!config.isDemo && playerCount < config.maxPlayers ? (
                   <div style={{ ...glass, borderRadius: '14px', padding: '14px 24px', display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--gold)', animation: 'pulseDot 1.5s ease-in-out infinite' }} />
-                    <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>
-                      Waiting for {config.maxPlayers - playerCount} more player{config.maxPlayers - playerCount > 1 ? 's' : ''}...
-                    </span>
+                    <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>Waiting for {config.maxPlayers - playerCount} more player{config.maxPlayers - playerCount > 1 ? 's' : ''}...</span>
                   </div>
                 ) : (
                   <div style={{ ...glass, borderRadius: '14px', padding: '14px 24px', display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444', animation: 'pulseDot 1s ease-in-out infinite' }} />
-                    <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>
-                      Game starts in <span style={{ fontFamily: 'Orbitron, monospace', color: 'var(--primary)' }}>{waitSeconds}s</span>
-                    </span>
+                    <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>Game starts in <span style={{ fontFamily: 'Orbitron, monospace', color: 'var(--primary)' }}>{waitSeconds}s</span></span>
                   </div>
                 )}
               </div>
@@ -335,9 +317,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                 ))}
               </div>
 
-              <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', cursor: 'pointer', textDecoration: 'underline' }}>
-                Leave room
-              </button>
+              <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', cursor: 'pointer', textDecoration: 'underline' }}>Leave room</button>
             </motion.div>
           )}
 
@@ -379,27 +359,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
             </motion.div>
           )}
 
-          {/* ── PAYING ───────────────────────────────────────────────────── */}
-          {phase === 'paying' && (
-            <motion.div key="paying" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}
-              style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}
-            >
-              <Confetti />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 'clamp(28px, 6vw, 48px)', fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px' }}>You won!</div>
-                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>Processing your payout...</div>
-              </div>
-              <div style={{ ...glass, borderRadius: '20px', padding: '28px 32px', textAlign: 'center', width: '100%' }}>
-                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '48px', fontWeight: 700, color: 'var(--gold)', marginBottom: '16px' }}>{POT} STRK</div>
-                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                  style={{ width: '32px', height: '32px', border: '3px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto' }}
-                />
-                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', marginTop: '16px' }}>Sending via Starkzap on Sepolia...</div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── DEMO CLAIM ───────────────────────────────────────────────── */}
+          {/* ── DEMO CLAIM — not signed in ────────────────────────────────── */}
           {phase === 'demo_claim' && (
             <motion.div key="demo_claim" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, type: 'spring', stiffness: 160 }}
               style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}
@@ -409,9 +369,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                 <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 'clamp(28px, 6vw, 48px)', fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px' }}>You beat the bot!</div>
                 <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>Sign in with X to claim your {POT} STRK</div>
               </motion.div>
-              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35 }}
-                style={{ ...glass, borderRadius: '20px', padding: '28px 32px', textAlign: 'center', width: '100%' }}
-              >
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35 }} style={{ ...glass, borderRadius: '20px', padding: '28px 32px', textAlign: 'center', width: '100%' }}>
                 <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 'clamp(32px, 7vw, 48px)', fontWeight: 700, color: 'var(--gold)', marginBottom: '4px' }}>{POT} STRK</div>
                 <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: 'var(--text2)', marginBottom: '24px' }}>Waiting to be claimed</div>
                 <div style={{ marginBottom: '24px' }}>
@@ -426,13 +384,92 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                 <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={login}
                   style={{ width: '100%', padding: '15px 24px', background: '#000000', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 24px rgba(0,0,0,0.3)', transition: 'all 0.2s' }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                   Sign in with X to claim
                 </motion.button>
               </motion.div>
               <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} onClick={reset}
                 style={{ background: 'none', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', cursor: 'pointer', textDecoration: 'underline' }}
               >Skip and play again</motion.button>
+            </motion.div>
+          )}
+
+          {/* ── ENTER WALLET ─────────────────────────────────────────────── */}
+          {phase === 'enter_wallet' && (
+            <motion.div key="enter_wallet" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, type: 'spring', stiffness: 160 }}
+              style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}
+            >
+              <Confetti />
+
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 'clamp(28px, 6vw, 48px)', fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px' }}>You won!</div>
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>Enter your Starknet wallet to receive {POT} STRK</div>
+              </motion.div>
+
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
+                style={{ ...glass, borderRadius: '20px', padding: '28px 32px', width: '100%' }}
+              >
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 'clamp(32px, 7vw, 48px)', fontWeight: 700, color: 'var(--gold)', textAlign: 'center', marginBottom: '24px' }}>{POT} STRK</div>
+
+                <div style={{ marginBottom: '8px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+                  Your Starknet wallet address
+                </div>
+                <input
+                  type="text"
+                  value={inputWallet}
+                  onChange={e => { setInputWallet(e.target.value); setWalletError('') }}
+                  placeholder="0x..."
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    border: walletError ? '1px solid var(--red)' : isDark ? '1px solid rgba(167,139,250,0.3)' : '1px solid rgba(124,58,237,0.2)',
+                    background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.6)',
+                    color: 'var(--text)',
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    marginBottom: '8px',
+                  }}
+                />
+                {walletError && (
+                  <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: 'var(--red)', marginBottom: '12px' }}>{walletError}</div>
+                )}
+
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '11px', color: 'var(--text2)', marginBottom: '20px' }}>
+                  Use your Argent X or Braavos wallet address on Starknet Sepolia
+                </div>
+
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={handleWalletSubmit}
+                  style={{ width: '100%', padding: '15px 24px', background: 'var(--primary)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 24px rgba(124,58,237,0.35)', transition: 'all 0.2s' }}
+                >
+                  Claim {POT} STRK
+                </motion.button>
+              </motion.div>
+
+              <button onClick={reset} style={{ background: 'none', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', cursor: 'pointer', textDecoration: 'underline' }}>
+                Skip and play again
+              </button>
+            </motion.div>
+          )}
+
+          {/* ── PAYING ───────────────────────────────────────────────────── */}
+          {phase === 'paying' && (
+            <motion.div key="paying" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}
+              style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 'clamp(28px, 6vw, 48px)', fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px' }}>Sending...</div>
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>Processing your payout via Starkzap</div>
+              </div>
+              <div style={{ ...glass, borderRadius: '20px', padding: '28px 32px', textAlign: 'center', width: '100%' }}>
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '48px', fontWeight: 700, color: 'var(--gold)', marginBottom: '16px' }}>{POT} STRK</div>
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                  style={{ width: '32px', height: '32px', border: '3px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto' }}
+                />
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '13px', color: 'var(--text2)', marginTop: '16px' }}>Sending to your wallet on Starknet Sepolia...</div>
+              </div>
             </motion.div>
           )}
 
@@ -459,7 +496,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                         style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: 'var(--primary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
                       >
                         View on Starkscan
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                       </a>
                     )}
                   </div>
@@ -483,7 +520,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
                 <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '15px', color: 'var(--text2)' }}>{POT} STRK returned to house wallet.</div>
               </div>
               <div style={{ ...glass, borderRadius: '20px', padding: '24px 32px', textAlign: 'center', width: '100%' }}>
-                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text2)', lineHeight: 1.6 }}>Next time, sign in with X before playing so your wallet is ready to receive instantly.</div>
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '14px', color: 'var(--text2)', lineHeight: 1.6 }}>Next time, sign in with X before playing so you can claim faster.</div>
               </div>
               <motion.button onClick={reset} whileHover={{ y: -2 }} style={{ padding: '14px 40px', background: 'var(--primary)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 24px rgba(124,58,237,0.35)' }}>Play again</motion.button>
             </motion.div>
@@ -496,9 +533,7 @@ export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authent
             >
               <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} style={{ textAlign: 'center' }}>
                 <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 'clamp(36px, 8vw, 60px)', fontWeight: 900, color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1, marginBottom: '8px' }}>Too slow.</div>
-                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>
-                  {config.isDemo ? 'The bot was faster.' : 'Someone else clicked first.'}
-                </div>
+                <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '16px', color: 'var(--text2)' }}>{config.isDemo ? 'The bot was faster.' : 'Someone else clicked first.'}</div>
               </motion.div>
               <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 }}
                 style={{ ...glass, borderRadius: '20px', padding: '24px 32px', textAlign: 'center', width: '100%' }}

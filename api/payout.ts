@@ -25,17 +25,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sdk = new StarkZap({ network: 'sepolia' })
 
     const { wallet } = await sdk.onboard({
-  strategy: OnboardStrategy.Signer,
-  account: { 
-    signer: new StarkSigner(privateKey),
-    accountClass: accountPresets.argentXV050,
-  },
-  deploy: 'never',
-})
+      strategy: OnboardStrategy.Signer,
+      account: {
+        signer: new StarkSigner(privateKey),
+        accountClass: accountPresets.argentXV050,
+      },
+      deploy: 'never',
+    })
 
     // Get STRK token preset for Sepolia
     const STRK = getPresets(wallet.getChainId()).STRK
 
+    // Validate winner address — must be a real hex address
+    if (!winnerAddress || !winnerAddress.startsWith('0x') || winnerAddress.length < 10) {
+      return res.status(400).json({ error: 'Invalid winner wallet address' })
+    }
     // Send STRK from house wallet to winner
     const tx = await wallet.transfer(STRK, [
       {
