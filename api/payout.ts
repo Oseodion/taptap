@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { StarkZap, StarkSigner, Amount, fromAddress, getPresets, OnboardStrategy } from 'starkzap'
+import { StarkZap, StarkSigner, Amount, fromAddress, getPresets, OnboardStrategy, accountPresets } from 'starkzap'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -25,10 +25,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sdk = new StarkZap({ network: 'sepolia' })
 
     const { wallet } = await sdk.onboard({
-      strategy: OnboardStrategy.Signer,
-      account: { signer: new StarkSigner(privateKey) },
-      deploy: 'if_needed',
-    })
+  strategy: OnboardStrategy.Signer,
+  account: { 
+    signer: new StarkSigner(privateKey),
+    accountClass: accountPresets.argentXV050,
+  },
+  deploy: 'never',
+})
 
     // Get STRK token preset for Sepolia
     const STRK = getPresets(wallet.getChainId()).STRK
