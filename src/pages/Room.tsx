@@ -43,7 +43,7 @@ const COUNTDOWN_DURATION = 10
 const CLICK_WINDOW = 3
 const CLAIM_WINDOW = 60
 
-export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, walletAddress, login, logout }: Props) {
+export default function Room({ isDark, toggleTheme, isMuted, toggleMute, authenticated, xHandle, xAvatar, login, logout }: Props) {
   const { id: roomId = 'demo' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const audio = useAudio(isMuted)
